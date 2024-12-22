@@ -1,16 +1,42 @@
+void sqlite_Init();  // 在这里声明 sqlite_Init()
+
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include <QFile>
 #include <QTextStream>
 #include <QDebug>
 #include <QMessageBox>
+#include <QSqlQuery>
+#include <QSqlError>
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow) {
     tcpServer = new QTcpServer(this);
     ui->setupUi(this);
+    // 初始化数据库
+    sqlite_Init();
+}
 
-
-
+void sqlite_Init()
+{
+    QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
+    db.setDatabaseName("user.db");
+    if (!db.open())
+    {
+        qDebug() << "打开数据库失败";
+    }
+    // 创建表格
+    QString createsql = QString("create table if not exists data(id integer primary key autoincrement,"
+                                "username ntext unique not NULL,"
+                                "password ntext not NULL,"
+                                "total_score INTEGER DEFAULT 0, "
+                                "high_score INTEGER DEFAULT 0)");
+    QSqlQuery query;
+    if (!query.exec(createsql)) {
+        qDebug() << "创建表时出错：" << query.lastError().text();
+    }
+    else {
+        qDebug() << "创建表格成功";
+    }
 }
 
 MainWindow::~MainWindow() {
@@ -29,8 +55,11 @@ void MainWindow::onNewConnection() {
     connect(clientSocket, &QTcpSocket::disconnected, this, &MainWindow::onDisconnected);
 
     clientSockets[clientSocket] = "游客";
-    ui->listWidget->addItem("用户："+clientSockets[clientSocket]);
-}
+    QListWidgetItem* newItem=new QListWidgetItem("用户："+clientSockets[clientSocket]);
+    clientSocketLabels[clientSocket]=newItem;
+    ui->listWidget->addItem(newItem);
+    QMessageBox::information(this, "用户连接", clientSockets[clientSocket]+"连接成功");
+}//新用户连接
 
 void MainWindow::onReadyRead() {
     QTcpSocket *clientSocket = qobject_cast<QTcpSocket*>(sender());
@@ -43,22 +72,52 @@ void MainWindow::onReadyRead() {
     QString request=parts[0];
     if(request=="a"){
         QString username=parts[1];
-        clientSockets[clientSocket] = username;
-        clientSocketLabels[clientSocket]->setText("用户 "+clientSockets[clientSocket]);
-        QMessageBox::information(this, "用户连接", clientSockets[clientSocket]+"连接成功");
-    }
-    if (parts.size() == 2) {
-        QString username = parts[0];
-        QString password = parts[1];
-
-        saveAccount(username, password);
-
-        QString response = "账户已保存";
-        clientSocket->write(response.toUtf8());
-    } else {
-        clientSocket->write("数据格式错误");
+        QString password=parts[2];
+        QString sql = QString("select * from data where username='%1' and password='%2'")
+                          .arg(username).arg(password);
+        // 创建执行语句对象
+        QSqlQuery query(sql);
+        // 判断执行结果
+        if (!query.next()) {
+            qDebug() << "执行查询时出错：" << query.lastError().text();
+            QString out="a 0";
+            onSendData(out,clientSocket);
+        }
+        else {
+            QString out="a 1";
+            onSendData(out,clientSocket);
+            clientSockets[clientSocket] = username;
+            clientSocketLabels[clientSocket]->setText("用户 "+username);
+        }
+        //用户登录
+    }else if(request=="b"){
+        QString username=parts[1];
+        QString password=parts[2];
+        int totalScore = 0;  // 总分默认值
+        int highScore = 0;   // 最高分默认值
+        QString sql = QString(
+                          "INSERT INTO data(username, password, total_score, high_score) "
+                          "VALUES('%1', '%2', %3, %4);"
+                          ).arg(username).arg(password).arg(totalScore).arg(highScore);
+        QSqlQuery query;
+        if(!query.exec(sql))
+        {
+            qDebug() << "执行查询时出错：" << query.lastError().text();
+            QString out="a 0";
+            onSendData(out,clientSocket);
+        }
+        else
+        {
+            QString out="a 1";
+            onSendData(out,clientSocket);
+        }
+        //注册用户
     }
 }
+
+void MainWindow::onSendData(QString data,QTcpSocket* tcpServer) {
+    tcpServer->write(data.toUtf8());
+}//发送信息
 
 void MainWindow::onDisconnected() {
     QTcpSocket *clientSocket = qobject_cast<QTcpSocket*>(sender());
@@ -66,16 +125,5 @@ void MainWindow::onDisconnected() {
         //ui->logText->append("客户端断开：" + clientSocket->peerAddress().toString());
         clientSockets.remove(clientSocket);
         clientSocket->deleteLater();
-    }
-}
-
-void MainWindow::saveAccount(const QString &username, const QString &password) {
-    accountData[username] = password;
-
-    QFile file("accounts.txt");
-    if (file.open(QIODevice::WriteOnly | QIODevice::Append)) {
-        QTextStream stream(&file);
-        stream << username << ";" << password << "\n";
-        file.close();
     }
 }
