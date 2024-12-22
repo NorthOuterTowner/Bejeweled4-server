@@ -6,6 +6,7 @@
 #include <QTcpSocket>
 #include <QMap>
 #include <QLabel>
+#include <QListWidget>
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
@@ -20,6 +21,7 @@ public:
 
 private slots:
     void onNewConnection();    // 新客户端连接
+    void onSendData(QString,QTcpSocket*);         // 发送
     void onReadyRead();        // 读取数据
     void onDisconnected();     // 客户端断开
 
@@ -27,10 +29,8 @@ private:
     Ui::MainWindow *ui;
     QTcpServer *tcpServer;
     QMap<QTcpSocket*, QString> clientSockets; // 保存连接的客户端信息
-    QMap<QTcpSocket*, QLabel*> clientSocketLabels; // 保存连接的客户端信息
+    QMap<QTcpSocket*, QListWidgetItem*> clientSocketLabels; // 保存连接的客户端信息
     QMap<QString, QString> accountData;       // 保存账户和密码
-
-    void saveAccount(const QString &username, const QString &password);
 };
 
 #endif // MAINWINDOW_H
