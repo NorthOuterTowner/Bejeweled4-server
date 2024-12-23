@@ -112,7 +112,74 @@ void MainWindow::onReadyRead() {
             onSendData(out,clientSocket);
         }
         //注册用户
+    }else if(request=="c"){
+        QString username=clientSockets[clientSocket];
+        QString sql = QString("SELECT total_score, high_score FROM data WHERE username = '%1';").arg(username);
+        int curscore=parts[1].toInt();
+        QSqlQuery query;
+        int totalScore = query.value(0).toInt();  // 获取 total_score 列
+        int highScore = query.value(1).toInt();   // 获取 high_score 列
+        if (query.exec(sql)) {
+            // 检查查询结果
+            if (query.next()) {
+                if(curscore>highScore){
+                    highScore=curscore;
+                }
+                totalScore+=highScore;
+            } else {
+                qDebug() << "未找到用户名：" << username;
+            }
+        } else {
+            qDebug() << "执行查询时出错：" << query.lastError().text();
+        }
+        sql = "UPDATE data SET total_score = :totalScore, high_score = :highScore WHERE username = :username;";
+        query.prepare(sql);
+
+        // 绑定参数
+        query.bindValue(":username", username);       // 绑定用户名
+        query.bindValue(":totalScore", totalScore);   // 绑定总分
+        query.bindValue(":highScore", highScore);     // 绑定最高分
+        // 执行查询
+        if (query.exec()) {
+            qDebug() << "用户数据更新成功！";
+        } else {
+            qDebug() << "执行更新查询时出错：" << query.lastError().text();
+        }
+        //更新总分与最高分
+    }else if(request=="d"){
+        QString out="b ";
+        QSqlQuery query;
+
+        // 查询总数
+        int totalUsernames;
+        QString countQuery = "SELECT COUNT(username) AS total_usernames FROM data;";
+        if (query.exec(countQuery)) {
+            if (query.next()) {
+                totalUsernames = query.value("total_usernames").toInt();
+                qDebug() << "用户名总数：" << totalUsernames;
+                out+=(QString::number(totalUsernames)+" ");
+            } else {
+                qDebug() << "未能获取用户名总数。";
+            }
+        } else {
+            qDebug() << "查询总数时出错：" << query.lastError().text();
+        }
+
+        // 查询所有 username 和 high_score
+        QString userQuery = "SELECT username, high_score FROM data;";
+        if (query.exec(userQuery)) {
+            qDebug() << "用户名和对应的最高分：";
+            while (query.next()) {
+                QString username = query.value("username").toString();
+                int highScore = query.value("high_score").toInt();
+                out+=(username+" "+QString::number(highScore)+" ");
+            }
+        } else {
+            qDebug() << "查询用户名和分数时出错：" << query.lastError().text();
+        }
+        onSendData(out,clientSocket);
     }
+    //输送排行信息
 }
 
 void MainWindow::onSendData(QString data,QTcpSocket* tcpServer) {
