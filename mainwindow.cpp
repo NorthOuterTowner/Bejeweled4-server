@@ -189,8 +189,10 @@ void MainWindow::onSendData(QString data,QTcpSocket* tcpServer) {
 void MainWindow::onDisconnected() {
     QTcpSocket *clientSocket = qobject_cast<QTcpSocket*>(sender());
     if (clientSocket) {
-        //ui->logText->append("客户端断开：" + clientSocket->peerAddress().toString());
+        QMessageBox::information(this, "用户连接", clientSockets[clientSocket]+"断开连接");
         clientSockets.remove(clientSocket);
+        ui->listWidget->takeItem(ui->listWidget->row(clientSocketLabels[clientSocket]));
+        clientSocketLabels.remove(clientSocket);
         clientSocket->deleteLater();
     }
 }
